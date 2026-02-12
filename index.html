@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>スピーカー設計：レスポンシブPro</title>
+    <title>スピーカー設計：操作ガイド付</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <style>
         :root { --accent: #44ff44; --bg: #1a1a1a; --panel: rgba(0,0,0,0.85); }
         body { margin: 0; background: var(--bg); color: #eee; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; }
         
-        /* レスポンシブ・コンテナ */
         #container { display: flex; height: 100vh; width: 100vw; flex-direction: row; }
         @media (max-width: 800px) { #container { flex-direction: column; } }
 
@@ -23,33 +22,44 @@
             #ui { width: 100%; height: 45%; border-right: none; border-bottom: 1px solid #444; } 
         }
 
-        /* 入力グリッド */
+        /* 操作マニュアル（右上） */
+        #help-guide {
+            position: absolute; top: 15px; right: 15px; background: rgba(0,0,0,0.6);
+            padding: 10px 15px; border-radius: 8px; border: 1px solid #444;
+            font-size: 11px; line-height: 1.6; z-index: 1000; pointer-events: none;
+            backdrop-filter: blur(4px);
+        }
+        #help-guide div { display: flex; align-items: center; margin-bottom: 2px; }
+        .guide-key { color: var(--accent); font-weight: bold; width: 70px; display: inline-block; }
+
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
         .full { grid-column: span 2; }
-
         h3 { margin: 0 0 15px 0; color: var(--accent); font-size: 1.1rem; border-bottom: 1px solid #333; padding-bottom: 5px; }
         label { display: block; font-size: 10px; color: #aaa; margin-bottom: 3px; font-weight: bold; }
         input { width: 100%; background: #222; border: 1px solid #555; color: #fff; padding: 10px; border-radius: 4px; box-sizing: border-box; font-size: 14px; }
         
         .result-box { background: #000; padding: 15px; border-radius: 6px; margin-top: 15px; border-top: 2px solid var(--accent); }
         .result-box h4 { margin: 0 0 10px 0; font-size: 12px; color: var(--accent); }
-        
         .cut-table { width: 100%; font-size: 12px; border-collapse: collapse; margin-bottom: 10px; }
         .cut-table th { text-align: left; color: #888; font-size: 10px; padding-bottom: 5px; border-bottom: 1px solid #333; }
         .cut-table td { padding: 8px 0; border-bottom: 1px solid #222; }
-        
         #csvOutput { width: 100%; background: #111; border: 1px solid #333; color: var(--accent); font-family: monospace; font-size: 11px; padding: 8px; border-radius: 4px; box-sizing: border-box; height: 70px; resize: none; }
-        
         .volume-display { color: var(--accent); font-size: 1.3rem; font-weight: bold; text-align: center; margin-bottom: 10px; }
         .warning { color: #ff4444; font-weight: bold; background: rgba(255,0,0,0.15); padding: 10px; border-radius: 6px; margin-bottom: 10px; font-size: 12px; border: 1px solid #ff4444; display: none; }
         
-        /* 3D領域 */
         #canvas-container { flex-grow: 1; position: relative; background: #000; }
         canvas { width: 100% !important; height: 100% !important; display: block; }
     </style>
 </head>
 <body>
     <div id="container">
+        <div id="help-guide">
+            <div><span class="guide-key">左ドラッグ</span>：回転</div>
+            <div><span class="guide-key">右ドラッグ</span>：移動</div>
+            <div><span class="guide-key">ホイール</span>：ズーム</div>
+            <div style="margin-top:5px; opacity:0.6; font-size:9px;">※スマホは1本指で回転、2本指で移動</div>
+        </div>
+
         <div id="ui">
             <h3>設計パラメーター</h3>
             <div id="warn" class="warning">⚠️ ユニットが裏板に干渉中</div>
@@ -95,12 +105,12 @@
             container.appendChild(renderer.domElement);
             
             controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true; // 動きを滑らかに
             scene.add(new THREE.AmbientLight(0xffffff, 0.7));
             camera.position.set(800, 600, 1000);
             group = new THREE.Group(); scene.add(group);
 
             window.addEventListener('resize', onWindowResize);
-            onWindowResize();
             updateModel();
         }
 
@@ -163,10 +173,10 @@
             document.getElementById('csvOutput').value = csvText;
         }
 
-            document.querySelectorAll('input').forEach(el => el.addEventListener('input', updateModel));
-            init();
-            function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
-            animate();
+        document.querySelectorAll('input').forEach(el => el.addEventListener('input', updateModel));
+        init();
+        function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+        animate();
     </script>
 </body>
 </html>
