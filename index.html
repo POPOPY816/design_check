@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>スピーカー設計：操作ガイド付</title>
+    <title>スピーカー設計：クリーンUI版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <style>
@@ -22,29 +22,38 @@
             #ui { width: 100%; height: 45%; border-right: none; border-bottom: 1px solid #444; } 
         }
 
-        /* 操作マニュアル（右上） */
-        #help-guide {
-            position: absolute; top: 15px; right: 15px; background: rgba(0,0,0,0.6);
-            padding: 10px 15px; border-radius: 8px; border: 1px solid #444;
-            font-size: 11px; line-height: 1.6; z-index: 1000; pointer-events: none;
-            backdrop-filter: blur(4px);
+        /* ヘルプボタンとガイド */
+        #help-btn {
+            position: absolute; top: 15px; right: 15px; width: 32px; height: 32px;
+            background: var(--accent); color: #000; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; cursor: pointer; z-index: 2000; box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            transition: transform 0.2s; pointer-events: auto;
         }
-        #help-guide div { display: flex; align-items: center; margin-bottom: 2px; }
+        #help-btn:hover { transform: scale(1.1); }
+
+        #help-guide {
+            position: absolute; top: 55px; right: 15px; background: rgba(0,0,0,0.9);
+            padding: 15px; border-radius: 8px; border: 1px solid var(--accent);
+            font-size: 11px; line-height: 1.6; z-index: 1000; width: 180px;
+            display: none; /* 初期は非表示 */
+            backdrop-filter: blur(8px);
+        }
         .guide-key { color: var(--accent); font-weight: bold; width: 70px; display: inline-block; }
 
+        /* 入力項目・出力表示 */
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
         .full { grid-column: span 2; }
         h3 { margin: 0 0 15px 0; color: var(--accent); font-size: 1.1rem; border-bottom: 1px solid #333; padding-bottom: 5px; }
         label { display: block; font-size: 10px; color: #aaa; margin-bottom: 3px; font-weight: bold; }
         input { width: 100%; background: #222; border: 1px solid #555; color: #fff; padding: 10px; border-radius: 4px; box-sizing: border-box; font-size: 14px; }
-        
         .result-box { background: #000; padding: 15px; border-radius: 6px; margin-top: 15px; border-top: 2px solid var(--accent); }
         .result-box h4 { margin: 0 0 10px 0; font-size: 12px; color: var(--accent); }
         .cut-table { width: 100%; font-size: 12px; border-collapse: collapse; margin-bottom: 10px; }
         .cut-table th { text-align: left; color: #888; font-size: 10px; padding-bottom: 5px; border-bottom: 1px solid #333; }
         .cut-table td { padding: 8px 0; border-bottom: 1px solid #222; }
         #csvOutput { width: 100%; background: #111; border: 1px solid #333; color: var(--accent); font-family: monospace; font-size: 11px; padding: 8px; border-radius: 4px; box-sizing: border-box; height: 70px; resize: none; }
-        .volume-display { color: var(--accent); font-size: 1.3rem; font-weight: bold; text-align: center; margin-bottom: 10px; }
+        .volume-display { color: var(--accent); font-size: 1.3rem; font-weight: bold; text-align: center; margin-bottom: 5px; }
         .warning { color: #ff4444; font-weight: bold; background: rgba(255,0,0,0.15); padding: 10px; border-radius: 6px; margin-bottom: 10px; font-size: 12px; border: 1px solid #ff4444; display: none; }
         
         #canvas-container { flex-grow: 1; position: relative; background: #000; }
@@ -53,11 +62,15 @@
 </head>
 <body>
     <div id="container">
+        <div id="help-btn" onclick="toggleHelp()">?</div>
         <div id="help-guide">
+            <div style="color:var(--accent); font-weight:bold; margin-bottom:8px; border-bottom:1px solid #444;">マウス操作</div>
             <div><span class="guide-key">左ドラッグ</span>：回転</div>
             <div><span class="guide-key">右ドラッグ</span>：移動</div>
             <div><span class="guide-key">ホイール</span>：ズーム</div>
-            <div style="margin-top:5px; opacity:0.6; font-size:9px;">※スマホは1本指で回転、2本指で移動</div>
+            <div style="color:var(--accent); font-weight:bold; margin-top:10px; margin-bottom:8px; border-bottom:1px solid #444;">スマホ操作</div>
+            <div>1本指：回転</div>
+            <div>2本指：ズーム / 移動</div>
         </div>
 
         <div id="ui">
@@ -96,6 +109,11 @@
     <script>
         let scene, camera, renderer, controls, group;
 
+        function toggleHelp() {
+            const guide = document.getElementById('help-guide');
+            guide.style.display = (guide.style.display === 'block') ? 'none' : 'block';
+        }
+
         function init() {
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(45, 1, 1, 5000);
@@ -105,7 +123,7 @@
             container.appendChild(renderer.domElement);
             
             controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true; // 動きを滑らかに
+            controls.enableDamping = true;
             scene.add(new THREE.AmbientLight(0xffffff, 0.7));
             camera.position.set(800, 600, 1000);
             group = new THREE.Group(); scene.add(group);
@@ -135,7 +153,7 @@
             const iD = D - (t * 2);
             const netLiters = (iW * iH * iD) / 1000000;
 
-            document.getElementById('logicArea').innerText = `式: (${iW} * ${iH} * ${iD}) / 10^6`;
+            document.getElementById('logicArea').innerText = `内寸: ${iW}x${iH}x${iD}mm`;
             document.getElementById('liters').innerText = netLiters.toFixed(2);
 
             while(group.children.length > 0){ group.remove(group.children[0]); }
@@ -144,6 +162,7 @@
                 b.position.set(x, y, z); group.add(b);
             };
 
+            // 各パーツ配置
             addB(W, t, D, 0, (H-t)/2, 0, 0x4444ff, 0.7); 
             addB(W, t, D, 0, -(H-t)/2, 0, 0x4444ff, 0.7); 
             addB(t, iH, D, -(W-t)/2, 0, 0, 0xff4444, 0.7); 
@@ -151,9 +170,11 @@
             addB(iW, iH, t, 0, 0, (D/2)-t/2, 0x44ff44, 0.5); 
             addB(iW, iH, t, 0, 0, -(D/2)+t/2, 0x44ff44, 0.5); 
 
+            // 穴
             const holeWall = new THREE.Mesh(new THREE.CylinderGeometry(holeD/2, holeD/2, t + 0.5, 64, 1, true), new THREE.MeshPhongMaterial({color:0x000000, side:THREE.DoubleSide}));
             holeWall.rotation.x = Math.PI/2; holeWall.position.set(0,0,(D/2)-t/2); group.add(holeWall);
 
+            // ユニット
             const u = new THREE.Mesh(new THREE.CylinderGeometry(holeD/2, holeD/4, unitD, 32), new THREE.MeshPhongMaterial({color:0xffaa00, transparent:true, opacity:0.8}));
             u.rotation.x = Math.PI/2; u.position.set(0,0,(D/2)-unitD/2); group.add(u);
 
