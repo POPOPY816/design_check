@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>スピーカー設計ツール：CSV出力版</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { margin: 0; background: #1a1a1a; color: #eee; font-family: sans-serif; display: flex; }
+        #ui { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.92); padding: 20px; border-radius: 12px; border: 1px solid #444; width: 340px; max-height: 95vh; overflow-y: auto; z-index: 100; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        h3 { margin-top: 0; color: #44ff44; font-size: 1.1rem; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        .input-group { margin-bottom: 10px; }
+        label { display: block; font-size: 11px; color: #aaa; margin-bottom: 4px; font-weight: bold; }
+        input { width: 100%; background: #222; border: 1px solid #555; color: #fff; padding: 6px; border-radius: 4px; box-sizing: border-box; font-size: 14px; }
+        .result-box { background: #000; padding: 15px; border-radius: 6px; margin-top: 15px; border-top: 2px solid #44ff44; }
+        .result-box h4 { margin: 0 0 10px 0; font-size: 12px; color: #44ff44; }
+        
+        /* カラム表示用 */
+        .cut-table { width: 100%; font-size: 12px; border-collapse: collapse; margin-bottom: 10px; }
+        .cut-table th { text-align: left; color: #888; font-size: 10px; padding-bottom: 5px; border-bottom: 1px solid #333; }
+        .cut-table td { padding: 5px 0; border-bottom: 1px solid #222; }
+        
+        /* コピー用エリア */
+        #csvOutput { width: 100%; background: #111; border: 1px solid #333; color: #44ff44; font-family: monospace; font-size: 11px; padding: 8px; border-radius: 4px; box-sizing: border-box; height: 80px; resize: none; margin-top: 10px; }
+        
+        .logic-text { font-size: 11px; color: #888; background: #111; padding: 10px; border-radius: 4px; margin-bottom: 10px; line-height: 1.4; font-family: monospace; }
+        .volume-display { color: #44ff44; font-size: 1.4rem; font-weight: bold; text-align: center; }
+        .warning { color: #ff4444; font-weight: bold; background: rgba(255,0,0,0.2); padding: 10px; border-radius: 6px; margin-top: 10px; font-size: 12px; border: 1px solid #ff4444; display: none; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h3>設計パラメーター</h3>
+        <div class="input-group"><label>板厚 (t) mm</label><input type="number" id="inT" value="12"></div>
+        <div class="input-group"><label>外寸 幅 (W) mm</label><input type="number" id="inW" value="450"></div>
+        <div class="input-group"><label>外寸 高 (H) mm</label><input type="number" id="inH" value="450"></div>
+        <div class="input-group"><label>外寸 奥 (D) mm</label><input type="number" id="inD" value="410"></div>
+        <div class="input-group"><label>取付穴径 φ mm</label><input type="number" id="inHole" value="283"></div>
+        <div class="input-group"><label>ユニット奥行 mm</label><input type="number" id="inUnitD" value="150"></div>
+        <div class="input-group"><label>補強板（窓枠）の数</label><input type="number" id="inBrace" value="2" min="0"></div>
+
+        <div id="warn" class="warning">⚠️ ユニットが裏板にぶつかっています！</div>
+
+        <div class="result-box">
+            <h4>内容積の計算根拠</h4>
+            <div id="logicArea" class="logic-text"></div>
+            <div class="volume-display"><span id="liters">0.0</span> L</div>
+        </div>
+
+        <div class="result-box">
+            <h4>木材カットリスト</h4>
+            <table class="cut-table">
+                <thead>
+                    <tr><th>部位</th><th>寸法1</th><th>寸法2</th><th>数量</th></tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+            <label>カンマ区切り（コピー用）</label>
+            <textarea id="csvOutput" readonly onclick="this.select()"></textarea>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, controls, group;
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 5000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x1a1a1a);
+            document.body.appendChild(renderer.domElement);
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            camera.position.set(800, 600, 1000);
+            group = new THREE.Group(); scene.add(group);
+            updateModel();
+        }
+
+        function updateModel() {
+            const t = parseFloat(document.getElementById('inT').value) || 0;
+            const W = parseFloat(document.getElementById('inW').value) || 0;
+            const H = parseFloat(document.getElementById('inH').value) || 0;
+            const D = parseFloat(document.getElementById('inD').value) || 0;
+            const holeD = parseFloat(document.getElementById('inHole').value) || 0;
+            const unitD = parseFloat(document.getElementById('inUnitD').value) || 0;
+            const bCount = parseInt(document.getElementById('inBrace').value) || 0;
+
+            const iW = W - (t * 2);
+            const iH = H - (t * 2);
+            const iD = D - (t * 2);
+            const netLiters = (iW * iH * iD) / 1000000;
+
+            document.getElementById('logicArea').innerHTML = `内寸幅: ${iW}mm / 高: ${iH}mm / 奥: ${iD}mm<br>計算: (${iW} * ${iH} * ${iD}) / 10^6`;
+            document.getElementById('liters').innerText = netLiters.toFixed(2);
+
+            while(group.children.length > 0){ group.remove(group.children[0]); }
+            const addB = (w, h, d, x, y, z, c, o) => {
+                const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshPhongMaterial({color: c, transparent:true, opacity:o}));
+                b.position.set(x, y, z); group.add(b);
+            };
+
+            addB(W, t, D, 0, (H-t)/2, 0, 0x4444ff, 0.7); 
+            addB(W, t, D, 0, -(H-t)/2, 0, 0x4444ff, 0.7); 
+            addB(t, iH, D, -(W-t)/2, 0, 0, 0xff4444, 0.7); 
+            addB(t, iH, D, (W-t)/2, 0, 0, 0xff4444, 0.7);
+            addB(iW, iH, t, 0, 0, (D/2)-t/2, 0x44ff44, 0.5); 
+            addB(iW, iH, t, 0, 0, -(D/2)+t/2, 0x44ff44, 0.5); 
+
+            const holeWall = new THREE.Mesh(new THREE.CylinderGeometry(holeD/2, holeD/2, t + 0.5, 64, 1, true), new THREE.MeshPhongMaterial({color:0x000000, side:THREE.DoubleSide}));
+            holeWall.rotation.x = Math.PI/2; holeWall.position.set(0,0,(D/2)-t/2); group.add(holeWall);
+
+            const u = new THREE.Mesh(new THREE.CylinderGeometry(holeD/2, holeD/4, unitD, 32), new THREE.MeshPhongMaterial({color:0xffaa00, transparent:true, opacity:0.8}));
+            u.rotation.x = Math.PI/2; u.position.set(0,0,(D/2)-unitD/2); group.add(u);
+
+            const isCrash = unitD > (D - t);
+            document.getElementById('warn').style.display = isCrash ? "block" : "none";
+
+            for(let i=1; i<=bCount; i++) addB(iW, iH, t, 0, 0, (D/2)-(D/(bCount+1))*i, 0x44ff44, 0.3);
+
+            // リストの生成
+            const items = [
+                ["天底", W, D, 2],
+                ["側板", iH, D, 2],
+                ["内板", iW, iH, 2 + bCount]
+            ];
+
+            let tableHtml = "";
+            let csvText = "部位,寸法1(mm),寸法2(mm),数量\n";
+            items.forEach(row => {
+                tableHtml += `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td>${row[3]}</td></tr>`;
+                csvText += row.join(",") + "\n";
+            });
+
+            document.getElementById('tableBody').innerHTML = tableHtml;
+            document.getElementById('csvOutput').value = csvText;
+        }
+
+        document.querySelectorAll('input').forEach(el => el.addEventListener('input', updateModel));
+        init();
+        function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+        animate();
+    </script>
+</body>
+</html>
